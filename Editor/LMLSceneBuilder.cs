@@ -45,8 +45,13 @@ namespace LML
             }
 
             // Define the path to the specific door prefab
-            string scriptPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(this)));
-            string prefabPath = Path.Combine(scriptPath, "..", "Prefabs", "Doorways", "Prefabs", $"{door.assetId}.prefab");
+            // This will work whether the code is in Packages or Assets
+            string packagePath = AssetDatabase.GUIDToAssetPath("com.limitlabs.lml2unity");
+            if (string.IsNullOrEmpty(packagePath))
+            {
+               packagePath = $"Assets/lml2unity/";
+            }
+            string prefabPath = Path.Combine(packagePath, "Prefabs", "Doorways", "Prefabs", $"{door.assetId}.prefab");
 
             // Load the specific door prefab by assetId
             string assetPath = prefabPath;
