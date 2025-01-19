@@ -1,0 +1,31 @@
+{
+  "name": "com.limitlabs.lml2unity",
+  "displayName": "LML to Unity Importer",
+  "version": "1.0.0",
+  "unity": "2020.3",
+  "description": "A plugin by Limit Labs to import and process LML files into Unity. Includes tools for downloading, extracting, and visualizing 3D scenes described in the LML format, with support for material and asset management.",
+  "keywords": [
+    "Limit Labs",
+    "LML",
+    "Importer",
+    "Unity",
+    "3D",
+    "Scene",
+    "Generative AI",
+    "Virtual Worlds"
+  ],
+  "category": "3D",
+  "dependencies": {
+    "com.unity.cloud.gltfast": "https://github.com/atteneder/glTFast.git#v6.8.0"
+  },
+  "author": {
+    "name": "Limit Labs",
+    "email": "contact@limitlabsai.com",
+    "url": "limitlabsai.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/limitlabsllc/lml2unity.git"
+  },
+  "unityRelease": "1.0.0"
+}
