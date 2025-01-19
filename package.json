@@ -13,7 +13,7 @@
     "url": "https://github.com/limitlabsllc/lml2unity-published.git"
   },
   "dependencies": {
-    "com.unity.cloud.gltfast": "1.0.0" 
+    "com.unity.cloud.gltfast": "6.10.0" 
   },
   "keywords": [
     "LML",
