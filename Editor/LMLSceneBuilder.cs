@@ -45,7 +45,8 @@ namespace LML
             }
 
             // Define the path to the specific door prefab
-            string prefabPath = $"Assets/lml2unity/Prefabs/Doorways/Prefabs/{door.assetId}.prefab";
+            string scriptPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(this)));
+            string prefabPath = Path.Combine(scriptPath, "..", "Prefabs", "Doorways", "Prefabs", $"{door.assetId}.prefab");
 
             // Load the specific door prefab by assetId
             string assetPath = prefabPath;
