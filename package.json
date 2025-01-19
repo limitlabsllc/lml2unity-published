@@ -1,10 +1,9 @@
 {
   "name": "com.limitlabs.lml2unity",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "displayName": "LML to Unity Plugin",
   "description": "A plugin to integrate Limit Labs' .lml files into Unity.",
-  "unity": "2021.3.0", 
-  "unityRelease": "f1",
+  "unity": "2020.3", 
   "author": {
     "name": "Limit Labs LLC",
     "url": "https://limitlabs.com"
