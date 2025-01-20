@@ -46,13 +46,15 @@ namespace LML
 
             // Define the path to the specific door prefab
             // This will work whether the code is in Packages or Assets
-            string packagePath = AssetDatabase.GUIDToAssetPath("com.limitlabs.lml2unity");
-            if (string.IsNullOrEmpty(packagePath))
+            string packagePath = "Packages/com.limitlabs.lml2unity";
+            // Check if the package directory exists
+            if (!Directory.Exists(packagePath))
             {
-               packagePath = $"Assets/lml2unity/";
+                Debug.Log($"Package path {packagePath} not found, using local development path");
+                packagePath = "Assets/lml2unity/";
             }
-            string prefabPath = Path.Combine(packagePath, "Prefabs", "Doorways", "Prefabs", $"{door.assetId}.prefab");
 
+            string prefabPath = Path.Combine(packagePath, "Prefabs", "Doorways", "Prefabs", $"{door.assetId}.prefab");
             // Load the specific door prefab by assetId
             string assetPath = prefabPath;
             GameObject doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
