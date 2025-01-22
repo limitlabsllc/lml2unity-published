@@ -7,6 +7,9 @@ using UnityEditor;
 using System.Threading.Tasks;
 using UnityEngine.Networking;
 using NUnit.Framework.Constraints;
+using UnityEditor.Experimental.GraphView;
+using UnityEditor.Callbacks;
+using System.Net;
 //using GLTFast.Schema;
 
 namespace LML
@@ -38,11 +41,6 @@ namespace LML
 
         private static void BuildDoor(LMLDoor door, GameObject parent)
         {
-            Debug.Log($"This door's assetId is {door.assetId}");
-            foreach (var doorPoly in door.holePolygon)
-            {
-                Debug.Log($"poly {doorPoly}");
-            }
 
             // Define the path to the specific door prefab
             // This will work whether the code is in Packages or Assets
@@ -101,7 +99,6 @@ namespace LML
                     doorInstance.transform.position = new Vector3(door.doorSegment[1][0], 0, door.doorSegment[1][1]);
                 }
             }
-            Debug.Log($"This YRot: {yRot}");
             
             doorInstance.transform.rotation = Quaternion.Euler(0, yRot, 0);
 
@@ -151,6 +148,11 @@ namespace LML
                 Vector3 start = room.vertices[i];
                 Vector3 end = room.vertices[(i + 1) % room.vertices.Count];
 
+                if (CheckOpenWallIntersection(start, end, scene))
+                {
+                    continue; //this wall should be open
+                }
+
                 // Calculate wall direction and normal for this segment
                 Vector3 wallDirection = (end - start).normalized;
                 Vector3 inwardNormal = new Vector3(-wallDirection.z, 0, wallDirection.x);
@@ -165,7 +167,7 @@ namespace LML
                 }
                 else
                 {
-                    Debug.Log($"Intersation at room {room.room_id}");
+                    //Debug.Log($"Intersation at room {room.room_id}");
                     // Sort doors by their position along the wall
                     intersectingDoors.Sort((a, b) =>
                     {
@@ -180,7 +182,6 @@ namespace LML
                         float distB = Mathf.Min(Vector3.Distance(b1, start), Vector3.Distance(b2, start));
                         return distA.CompareTo(distB);
                     });
-
 
                     Vector3 currentStart = start;
 
@@ -300,6 +301,24 @@ namespace LML
 
                 BuildObjectInstance(instance, obj, assetsPath, roomGO);
             }
+        }
+
+        private static bool CheckOpenWallIntersection(Vector3 wallStart, Vector3 wallEnd, LMLScene scene)
+        {
+            foreach (LMLOpenWall openWall in scene.openWalls)
+            {
+                foreach (List<List<float>> segment in openWall.segments)
+                {
+                    if (
+                         (segment[0][0] == wallStart.x && segment[0][1] == wallStart.z && segment[1][0] == wallEnd.x && segment[1][1] == wallEnd.z) ||
+                         (segment[0][0] == wallEnd.x && segment[0][1] == wallEnd.z && segment[1][0] == wallStart.x && segment[1][1] == wallStart.z)
+                        )
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private static List<LMLDoor> FindIntersectingDoors(Vector3 wallStart, Vector3 wallEnd, List<LMLDoor> doors)
@@ -427,7 +446,6 @@ namespace LML
             return relativePath;
         }
 
-
         private static void BuildObjectInstance(LMLInstance instance, LMLObject obj, string assetsPath, GameObject parent)
         {
             if (obj.assets == null || obj.assets.Count == 0)
@@ -444,16 +462,35 @@ namespace LML
                 meshPath = meshPath.Substring("objathor/".Length);
             }
 
-            string assetPath = GetUnityAssetPath(Path.Combine(assetsPath, meshPath, "mesh.glb"));
+            //JSON METADATA
+            ModelData modelData;
+            try
+            {
+                string jsonPath = GetUnityAssetPath(Path.Combine(assetsPath, meshPath, "metadata.json"));
+                string jsonContent = File.ReadAllText(jsonPath);
+                modelData = JsonUtility.FromJson<ModelData>(jsonContent);
+            }
+            catch
+            {
+                modelData = defaultModelData;
+            }
 
-            // Load the prefab from the Assets folder
+            //PrintModelData(modelData);
+
+            string assetPath = GetUnityAssetPath(Path.Combine(assetsPath, meshPath, "mesh_rescaled.glb"));
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+
+            if (prefab == null)
+            {
+                assetPath = GetUnityAssetPath(Path.Combine(assetsPath, meshPath, "mesh.glb"));
+                prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            }
 
             if (prefab == null)
             {
                 Debug.LogWarning($"Prefab not found for asset: {assetPath}");
                 return;
-            }
+            }       
 
             // Instantiate the prefab
             GameObject instanceGO = GameObject.Instantiate(prefab, parent.transform);
@@ -461,22 +498,39 @@ namespace LML
 
             // Set the transform based on instance data
             instanceGO.transform.localPosition = new Vector3(
-                instance.transform.position.x,
-                instance.transform.position.y,
-                instance.transform.position.z
+                CalcOffset(modelData.bbox.min.x, modelData.bbox.max.x, instance.transform.position.x),
+                CalcOffset(modelData.bbox.min.y, modelData.bbox.max.y, instance.transform.position.y) - modelData.bbox.min.y,
+                CalcOffset(modelData.bbox.min.z, modelData.bbox.max.z, instance.transform.position.z)
             );
 
+            
+
+            Vector3 rotSource = instanceGO.transform.rotation.eulerAngles;
+            Vector3 target = instance.transform.rotation;
+
+            Vector3 newAngle = rotSource + target;
+            newAngle.y -= modelData.pose_z_rot_angle * 180f / 3.1415192653589793284f;
+
+
+            /*
             instanceGO.transform.localRotation *= Quaternion.Euler(
                 instance.transform.rotation.x,
                 instance.transform.rotation.y,
                 instance.transform.rotation.z
             );
+            */
+            instanceGO.transform.localRotation = Quaternion.Euler(newAngle);
 
             instanceGO.transform.localScale = new Vector3(
-                instance.transform.scaling.x,
-                instance.transform.scaling.y,
-                instance.transform.scaling.z
+                instanceGO.transform.localScale.x * instance.transform.scaling.x,
+                instanceGO.transform.localScale.y * instance.transform.scaling.y,
+                instanceGO.transform.localScale.z * instance.transform.scaling.z
             );
+
+            //instanceGO.transform.localScale /= modelData.lml_scale_factor;
+
+            LMLAssetLicense thisLicense = instanceGO.AddComponent<LMLAssetLicense>();
+            thisLicense.attribution = modelData.license_info.ToString();
 
             // Add a kinematic Rigidbody
             Rigidbody rb = instanceGO.GetComponent<Rigidbody>();
@@ -512,8 +566,8 @@ namespace LML
                 material = await NetworkingUtils.DownloadMaterialAsync(materialFileUrl);
                 if (material == null)
                 {
-                    Debug.LogError($"Failed to load material from file: {materialFileName}");
-                    return null;
+                    Debug.LogError($"Failed to load material from file: {materialFileName} URL: {materialFileUrl}");
+                    material = new Material(Shader.Find("Standard"));
                 }
 
                 // Step 3: Fetch and assign albedo texture
@@ -544,7 +598,13 @@ namespace LML
                             }
                             else
                             {
+                                Debug.Log("TRYING TO USE PNG ALBEDO");
                                 //Debug.LogWarning($"Albedo texture not available for: {materialName}");
+                                albedoFileName = $"{materialName}_albedo.png";
+                                //Debug.Log($"Fetching albedo texture: {albedoFileName}");
+                                albedoFileUrl = await NetworkingUtils.FetchSignedURLAsync(albedoFileName);
+                                albedoTexture = await NetworkingUtils.TryFetchTextureAsync(albedoFileUrl);
+                                Debug.Log($"Fetched the albedo maybe? Would be {materialName}, {(albedoTexture != null ? "valid":"invalid")}");
                             }
                         }
                         
@@ -574,7 +634,11 @@ namespace LML
                 }
                 else
                 {
-                    Debug.LogWarning($"No normal map found for: {materialName}");
+                    normalFileNamePng = $"{materialName}_Normal.png";
+                    normalFileUrl = await NetworkingUtils.FetchSignedURLAsync(normalFileNamePng);
+                    normalMap = await NetworkingUtils.TryFetchTextureAsync(normalFileUrl);
+                    if (normalMap == null)
+                        Debug.LogWarning($"No normal map found for: {materialName}");
                 }
 
                 material.name = materialName;
@@ -587,5 +651,130 @@ namespace LML
             }
         }
 
+        private static float CalcOffset(float min, float max, float current)
+        {
+            float size = Math.Abs(max - min);
+            float relativeCenter = min + size / 2;
+            float offset  = -relativeCenter;
+            return current - offset;
+        }
+
+        public static void PrintModelData(ModelData data)
+        {
+            if (data == null)
+            {
+                Debug.LogError("ModelData is null!");
+                return;
+            }
+
+            // Bounding Box
+            Debug.Log("=== Bounding Box ===");
+            if (data.bbox != null)
+            {
+                Debug.Log($"Min: ({data.bbox.min.x}, {data.bbox.min.y}, {data.bbox.min.z})");
+                Debug.Log($"Max: ({data.bbox.max.x}, {data.bbox.max.y}, {data.bbox.max.z})");
+            }
+            else
+            {
+                Debug.Log("bbox is null");
+            }
+
+            // Unscaled Bounding Box
+            Debug.Log("=== Unscaled Bounding Box ===");
+            if (data.bbox_unscaled != null)
+            {
+                Debug.Log($"Min: ({data.bbox_unscaled.min.x}, {data.bbox_unscaled.min.y}, {data.bbox_unscaled.min.z})");
+                Debug.Log($"Max: ({data.bbox_unscaled.max.x}, {data.bbox_unscaled.max.y}, {data.bbox_unscaled.max.z})");
+            }
+            else
+            {
+                Debug.Log("bbox_unscaled is null");
+            }
+
+            // Scale values
+            Debug.Log("=== Scale Values ===");
+            Debug.Log($"Scale: {data.scale}");
+            Debug.Log($"LML Scale Factor: {data.lml_scale_factor}");
+            Debug.Log($"Pose Z Rotation Angle: {data.pose_z_rot_angle}");
+
+            // License Info
+            Debug.Log("=== License Info ===");
+            if (data.license_info != null)
+            {
+                Debug.Log($"License: {data.license_info.license}");
+                Debug.Log($"URI: {data.license_info.uri}");
+                Debug.Log($"Creator Username: {data.license_info.creator_username}");
+                Debug.Log($"Creator Display Name: {data.license_info.creator_display_name}");
+                Debug.Log($"Creator Profile URL: {data.license_info.creator_profile_url}");
+            }
+            else
+            {
+                Debug.Log("license_info is null");
+            }
+        }
+
+        static ModelData defaultModelData = new ModelData
+        {
+            bbox = new BoundingBox
+            {
+                min = new Vector3Data { x = 0, y = 0, z = 0 },
+                max = new Vector3Data { x = 0, y = 0, z = 0 }
+            },
+            bbox_unscaled = new BoundingBox
+            {
+                min = new Vector3Data { x = 0, y = 0, z = 0 },
+                max = new Vector3Data { x = 0, y = 0, z = 0 }
+            },
+            scale = 1f,
+            lml_scale_factor = 1f,
+            pose_z_rot_angle = 0f,
+            license_info = new LicenseInfo()
+        };
+
     }
+
+    [System.Serializable]
+    public class Vector3Data
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
+    [System.Serializable]
+    public class BoundingBox
+    {
+        public Vector3Data min;
+        public Vector3Data max;
+    }
+
+    [System.Serializable]
+    public class LicenseInfo
+    {
+        public string license;
+        public string uri;
+        public string creator_username;
+        public string creator_display_name;
+        public string creator_profile_url;
+
+        public override string ToString()
+        {
+            return $"License: {license}\n" +
+                   $"URI: {uri}\n" +
+                   $"Creator: {creator_display_name} (@{creator_username})\n" +
+                   $"Profile: {creator_profile_url}";
+        }
+    }
+
+    [System.Serializable]
+    public class ModelData
+    {
+        public BoundingBox bbox;
+        public BoundingBox bbox_unscaled;
+        public float scale;
+        public float lml_scale_factor;
+        public float pose_z_rot_angle;
+        public LicenseInfo license_info;
+    }
+
 }

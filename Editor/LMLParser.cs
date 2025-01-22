@@ -13,6 +13,7 @@ namespace LML
         public Dictionary<string, LMLObject> objects;
         public List<LMLRoom> rooms;
         public List<LMLDoor> doors;
+        public List<LMLOpenWall> openWalls;
     }
 
     [Serializable]
@@ -72,6 +73,16 @@ namespace LML
         public List<List<float>> doorSegment;
         public Vector3 assetPosition;
         public string assetId;
+    }
+
+    [Serializable]
+    public class LMLOpenWall
+    {
+        [JsonProperty("segments")]
+        public List<List<List<float>>> segments;  // [[[x1,y1], [x2,y2]], ...]
+
+        [JsonProperty("openWallBoxes")]
+        public List<List<List<float>>> openWallBoxes;  // [[[x1,y1], [x2,y2], [x3,y3], [x4,y4]], ...]
     }
 
     public static class LMLParser
