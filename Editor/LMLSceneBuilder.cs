@@ -1,12 +1,10 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-//using GLTFast; // Assuming you're using glTFast for .glb handling
 using System;
 using UnityEditor;
 using System.Threading.Tasks;
 using UnityEngine.Networking;
-using NUnit.Framework.Constraints;
 using UnityEditor.Experimental.GraphView;
 using UnityEditor.Callbacks;
 using System.Net;
@@ -499,7 +497,7 @@ namespace LML
             // Set the transform based on instance data
             instanceGO.transform.localPosition = new Vector3(
                 CalcOffset(modelData.bbox.min.x, modelData.bbox.max.x, instance.transform.position.x),
-                CalcOffset(modelData.bbox.min.y, modelData.bbox.max.y, instance.transform.position.y) - modelData.bbox.min.y,
+                instance.transform.position.y, //CalcOffset(modelData.bbox.min.y, modelData.bbox.max.y, instance.transform.position.y) - modelData.bbox.min.y,
                 CalcOffset(modelData.bbox.min.z, modelData.bbox.max.z, instance.transform.position.z)
             );
 
