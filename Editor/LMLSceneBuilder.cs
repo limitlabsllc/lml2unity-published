@@ -8,6 +8,8 @@ using UnityEngine.Networking;
 using UnityEditor.Experimental.GraphView;
 using UnityEditor.Callbacks;
 using System.Net;
+using UnityEngine.Rendering;
+
 //using GLTFast.Schema;
 
 namespace LML
@@ -16,8 +18,138 @@ namespace LML
     {
         private static Dictionary<string, GameObject> sharedWalls;
 
+        private static bool isURPProject;
+
+        public static bool IsURPProject()
+        {
+            var pipeline = GraphicsSettings.currentRenderPipeline;
+            if (pipeline != null)
+            {
+                // Check if the render pipeline's type name contains "Universal"
+                // This avoids direct URP type references that would cause compilation errors
+                isURPProject = pipeline.GetType().FullName.Contains("Universal");
+                return isURPProject;
+            }
+            return false;
+        }
+
+        public static Material ConvertToURP(Material standardMaterial)
+        {
+            // Find the URP Lit shader
+            Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpShader == null)
+            {
+                Debug.LogError("URP Lit shader not found! Make sure URP is properly installed.");
+                return standardMaterial;
+            }
+
+            // Create new material with URP shader
+            Material urpMaterial = new Material(urpShader);
+            urpMaterial.name = standardMaterial.name;
+
+            // Main Texture and Color
+            if (standardMaterial.HasProperty("_MainTex"))
+            {
+                urpMaterial.SetTexture("_BaseMap", standardMaterial.GetTexture("_MainTex"));
+            }
+            if (standardMaterial.HasProperty("_Color"))
+            {
+                urpMaterial.SetColor("_BaseColor", standardMaterial.GetColor("_Color"));
+            }
+
+            // Normal Map
+            if (standardMaterial.HasProperty("_BumpMap"))
+            {
+                var normalMap = standardMaterial.GetTexture("_BumpMap");
+                if (normalMap != null)
+                {
+                    urpMaterial.SetTexture("_BumpMap", normalMap);
+                    urpMaterial.EnableKeyword("_NORMALMAP");
+
+                    // Copy normal map intensity if it exists
+                    if (standardMaterial.HasProperty("_BumpScale"))
+                    {
+                        urpMaterial.SetFloat("_BumpScale", standardMaterial.GetFloat("_BumpScale"));
+                    }
+                }
+            }
+
+            // Metallic Setup
+            if (standardMaterial.HasProperty("_MetallicGlossMap"))
+            {
+                var metallicMap = standardMaterial.GetTexture("_MetallicGlossMap");
+                if (metallicMap != null)
+                {
+                    urpMaterial.SetTexture("_MetallicGlossMap", metallicMap);
+                    urpMaterial.EnableKeyword("_METALLICSPECGLOSSMAP");
+                }
+            }
+            if (standardMaterial.HasProperty("_Metallic"))
+            {
+                urpMaterial.SetFloat("_Metallic", standardMaterial.GetFloat("_Metallic"));
+            }
+
+            // Smoothness
+            if (standardMaterial.HasProperty("_Glossiness"))
+            {
+                urpMaterial.SetFloat("_Smoothness", standardMaterial.GetFloat("_Glossiness"));
+            }
+            else if (standardMaterial.HasProperty("_Glossiness"))
+            {
+                urpMaterial.SetFloat("_Smoothness", standardMaterial.GetFloat("_Glossiness"));
+            }
+
+            // Emission
+            if (standardMaterial.HasProperty("_EmissionColor"))
+            {
+                var emissionColor = standardMaterial.GetColor("_EmissionColor");
+                if (emissionColor != Color.black)
+                {
+                    urpMaterial.SetColor("_EmissionColor", emissionColor);
+                    urpMaterial.EnableKeyword("_EMISSION");
+                }
+            }
+            if (standardMaterial.HasProperty("_EmissionMap"))
+            {
+                var emissionMap = standardMaterial.GetTexture("_EmissionMap");
+                if (emissionMap != null)
+                {
+                    urpMaterial.SetTexture("_EmissionMap", emissionMap);
+                    urpMaterial.EnableKeyword("_EMISSION");
+                }
+            }
+
+            // Occlusion
+            if (standardMaterial.HasProperty("_OcclusionMap"))
+            {
+                var occlusionMap = standardMaterial.GetTexture("_OcclusionMap");
+                if (occlusionMap != null)
+                {
+                    urpMaterial.SetTexture("_OcclusionMap", occlusionMap);
+
+                    if (standardMaterial.HasProperty("_OcclusionStrength"))
+                    {
+                        urpMaterial.SetFloat("_OcclusionStrength",
+                            standardMaterial.GetFloat("_OcclusionStrength"));
+                    }
+                }
+            }
+
+            // Surface Settings
+            urpMaterial.SetFloat("_Surface", 0); // 0 = Opaque, 1 = Transparent
+            urpMaterial.SetFloat("_WorkflowMode", 1); // 1 = Metallic workflow
+
+            // Copy rendering settings
+            urpMaterial.renderQueue = standardMaterial.renderQueue;
+            urpMaterial.enableInstancing = standardMaterial.enableInstancing;
+            urpMaterial.doubleSidedGI = standardMaterial.doubleSidedGI;
+
+            return urpMaterial;
+        }
+
         public static GameObject BuildScene(LMLScene scene, string assetsPath)
         {
+            Debug.Log($"IS UNIVERSAL: {IsURPProject()}");
             // Create a parent GameObject to hold the imported scene
             GameObject sceneParent = new GameObject("ImportedLMLScene");
 
@@ -565,7 +697,11 @@ namespace LML
                 if (material == null)
                 {
                     Debug.LogError($"Failed to load material from file: {materialFileName} URL: {materialFileUrl}");
-                    material = new Material(Shader.Find("Standard"));
+                    material = IsURPProject() ? new Material(Shader.Find("Universal Render Pipeline/Lit")) : new Material(Shader.Find("Standard"));
+                }
+                else if (IsURPProject())
+                {
+                    material = ConvertToURP(material);
                 }
 
                 // Step 3: Fetch and assign albedo texture
