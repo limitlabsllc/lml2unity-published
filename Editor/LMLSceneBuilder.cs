@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using GLTFast; // Assuming you're using glTFast for .glb handling
+//using GLTFast; // Assuming you're using glTFast for .glb handling
 using System;
 using UnityEditor;
 using System.Threading.Tasks;
