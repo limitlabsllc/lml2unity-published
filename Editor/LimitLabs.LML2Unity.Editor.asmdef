@@ -1,0 +1,14 @@
+{
+    "name": "LimitLabs.LML2Unity.Editor",
+    "references": [
+        "LimitLabs.LML2Unity",
+        "GLTFast"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "noEngineReferences": false
+}
