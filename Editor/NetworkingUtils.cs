@@ -131,21 +131,28 @@ namespace LML
             }
         }
 
-        public static async Task DownloadFileAsync(string url, string localPath)
+        public static async Task DownloadFileAsync(string url, string localPath, bool refresh = false)
         {
-            //Debug.Log($"Starting download from URL: {url} to path: {localPath}");
-
             try
             {
                 using (UnityWebRequest request = UnityWebRequest.Get(url))
                 {
-                    // Send the web request and wait for completion
                     await NetworkingUtils.SendUnityWebRequestAsync(request);
-
                     if (request.result != UnityWebRequest.Result.Success)
                     {
                         Debug.LogError($"Failed to download file: {request.error}");
                         Debug.LogError($"Response Code: {request.responseCode}");
+
+                        if (refresh)
+                        {
+                            string refreshedUrl = await RefreshPresignedUrl(url);
+                            if (!string.IsNullOrEmpty(refreshedUrl))
+                            {
+                                await DownloadFileAsync(refreshedUrl, localPath, false);
+                                return;
+                            }
+                        }
+
                         if (request.downloadHandler != null)
                         {
                             Debug.LogError($"Response Text: {request.downloadHandler.text}");
@@ -153,41 +160,93 @@ namespace LML
                         return;
                     }
 
-                    // Ensure the directory exists
                     string directory = Path.GetDirectoryName(localPath);
                     if (!Directory.Exists(directory))
                     {
                         Directory.CreateDirectory(directory);
-                        //Debug.Log($"Created directory: {directory}");
                     }
 
-                    // Write the file to the local path
                     File.WriteAllBytes(localPath, request.downloadHandler.data);
-                    //Debug.Log($"Successfully downloaded file to: {localPath}");
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Error downloading file from URL: {url}. Exception: {ex.Message}");
+                Debug.Log("Gonna try refresh where you didn't want to");
+                if (refresh)
+                {
+                    // Call Lambda to refresh URL
+                    string refreshedUrl = await RefreshPresignedUrl(url);
+                    if (!string.IsNullOrEmpty(refreshedUrl))
+                    {
+                        // Retry download with new URL
+                        await DownloadFileAsync(refreshedUrl, localPath, false);
+                        return;
+                    }
+                }
             }
+        }
+
+        [Serializable]
+        public class RefreshUrlRequest
+        {
+            public string expired_url;
+        }
+
+        private static async Task<string> RefreshPresignedUrl(string expiredUrl)
+        {
+            try
+            {
+                var requestBody = new RefreshUrlRequest { expired_url = expiredUrl };
+                string jsonString = JsonUtility.ToJson(requestBody);
+
+                using (UnityWebRequest request = new UnityWebRequest("https://bcxt5ktslh.execute-api.us-east-1.amazonaws.com/default/refresh-url", "POST"))
+                {
+                    byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonString);
+                    request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                    request.downloadHandler = new DownloadHandlerBuffer();
+                    request.SetRequestHeader("Content-Type", "application/json");
+
+                    await SendUnityWebRequestAsync(request);
+
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        // Try parsing directly since Lambda response might be a string
+                        var responseText = request.downloadHandler.text;
+                        try
+                        {
+                            // Remove quotes if present
+                            responseText = responseText.Trim('"');
+                            return responseText;
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    }
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error in RefreshPresignedUrl: {ex.Message}");
+                return null;
+            }
+        }
+
+        [System.Serializable]
+        private class LambdaResponse2
+        {
+            public int statusCode;
+            public string body;
         }
 
         private static Task<UnityWebRequest> SendUnityWebRequestAsync(UnityWebRequest request)
         {
             var tcs = new TaskCompletionSource<UnityWebRequest>();
-
-            request.SendWebRequest().completed += operation =>
-            {
-                if (request.result == UnityWebRequest.Result.Success)
-                {
-                    tcs.SetResult(request);
-                }
-                else
-                {
-                    tcs.SetException(new Exception(request.error));
-                }
+            request.SendWebRequest().completed += operation => {
+                tcs.SetResult(request);
             };
-
             return tcs.Task;
         }
 

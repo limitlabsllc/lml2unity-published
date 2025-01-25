@@ -90,7 +90,7 @@ namespace LML
                 Debug.Log($"Downloading .tar.gz file from: {url} to {tarGzFilePath}");
 
                 // Download the file
-                await NetworkingUtils.DownloadFileAsync(url, tarGzFilePath);
+                await NetworkingUtils.DownloadFileAsync(url, tarGzFilePath, true);
                 Debug.Log("Download completed.");
 
                 // Extract the .tar.gz file
